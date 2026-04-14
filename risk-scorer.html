@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conversation Risk Scorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Aboreto&family=Mulish:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --orange:   #ffa500;
+    --orange2:  #ffb733;
+    --dark:     #212529;
+    --neutral:  #707070;
+    --light:    #f5f5f5;
+    --white:    #ffffff;
+    --red:      #e63946;
+    --green:    #2a9d8f;
+    --yellow:   #e9c46a;
+    --shadow:   0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
+    --radius:   16px;
+  }
+
+  body {
+    font-family: Mulish, sans-serif;
+    background: #1a1a1a;
+    color: var(--white);
+    min-height: 100vh;
+    padding: clamp(16px, 3vw, 48px);
+  }
+
+  /* ── Header ── */
+  .app-header {
+    display: block !important;
+    width: 100% !important;
+    text-align: center;
+    margin-bottom: clamp(24px, 4vw, 48px);
+    float: none !important;
+  }
+  .app-header .eyebrow {
+    font-family: Mulish, sans-serif;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: var(--orange); margin-bottom: 10px;
+  }
+  .app-header h1 {
+    font-family: Aboreto, serif;
+    font-size: clamp(24px, 4vw, 48px);
+    color: var(--white);
+    letter-spacing: .02em; line-height: 1.15;
+    margin-bottom: 12px;
+  }
+  .app-header p {
+    font-size: clamp(13px, 1.2vw, 16px);
+    color: rgba(255,255,255,0.6);
+    max-width: 560px; margin: 0 auto; line-height: 1.6;
+  }
+
+  /* ── Main layout ── */
+  .app-body {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(16px, 2vw, 28px);
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100% !important;
+    min-width: 0;
+    float: none !important;
+    clear: both !important;
+  }
+
+  /* ── Panels ── */
+  .panel {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius);
+    padding: clamp(20px, 2.5vw, 32px);
+    backdrop-filter: blur(8px);
+  }
+  .panel-title {
+    font-family: Aboreto, serif;
+    font-size: clamp(13px, 1.1vw, 16px);
+    color: var(--orange);
+    letter-spacing: .06em;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+
+  /* ── Sliders ── */
+  .feature-group { margin-bottom: 18px; }
+  .feature-header {
+    display: flex; justify-content: space-between;
+    align-items: baseline; margin-bottom: 6px;
+  }
+  .feature-label {
+    font-size: 12px; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+  }
+  .feature-value {
+    font-family: Aboreto, serif;
+    font-size: 14px; color: var(--orange);
+    min-width: 52px; text-align: right;
+  }
+  .feature-desc {
+    font-size: 11px; color: rgba(255,255,255,0.35);
+    margin-bottom: 6px; line-height: 1.4;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%; height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px; outline: none;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  input[type=range]:hover { background: rgba(255,255,255,0.18); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--orange);
+    box-shadow: 0 0 8px rgba(255,165,0,0.5);
+    transition: transform .15s, box-shadow .15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.25);
+    box-shadow: 0 0 14px rgba(255,165,0,0.7);
+  }
+
+  /* ── Select inputs ── */
+  .select-group { margin-bottom: 18px; }
+  select {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; color: var(--white);
+    font-family: Mulish, sans-serif; font-size: 13px;
+    padding: 10px 14px; cursor: pointer;
+    outline: none; appearance: none;
+    transition: border-color .2s;
+  }
+  select:focus { border-color: var(--orange); }
+  select option { background: #2a2a2a; }
+
+  /* ── Results panel ── */
+  .results-panel {
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  /* ── Full-width gauge above grid ── */
+  .gauge-full {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    padding: 16px 0 8px;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100% !important;
+    float: none !important;
+    clear: both !important;
+  }
+
+  /* ── Risk gauge ── */
+  .gauge-wrap {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 8px 0 8px;
+  }
+  .gauge-svg { width: 200px; height: 120px; overflow: visible; }
+  .gauge-track {
+    fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 14;
+    stroke-linecap: round;
+  }
+  .gauge-fill {
+    fill: none; stroke-width: 14; stroke-linecap: round;
+    transition: stroke-dashoffset .7s cubic-bezier(.4,0,.2,1),
+                stroke .4s ease;
+  }
+  .gauge-center-text {
+    text-anchor: middle;
+  }
+  .gauge-pct {
+    font-family: Aboreto, serif; font-size: 28px;
+    fill: var(--white); dominant-baseline: middle;
+  }
+  .gauge-sub {
+    font-family: Mulish, sans-serif; font-size: 10px;
+    fill: rgba(255,255,255,0.45); letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  /* ── Prediction cards ── */
+  .prediction-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    min-width: 0;
+  }
+  .pred-card {
+    border-radius: 12px; padding: 12px;
+    border: 2px solid transparent;
+    transition: all .4s ease;
+    position: relative; overflow: hidden;
+    min-width: 0; word-break: break-word;
+  }
+  .pred-card::before {
+    content: ''; position: absolute;
+    inset: 0; opacity: 0;
+    transition: opacity .4s ease;
+  }
+  .pred-card.l1 { background: rgba(255,255,255,0.04); }
+  .pred-card.l2 { background: rgba(255,255,255,0.04); }
+  .pred-card.active-resolved { border-color: var(--green); }
+  .pred-card.active-failed   { border-color: var(--red); }
+  .pred-card.active-escalated{ border-color: var(--orange); }
+  .pred-card.active-abandoned { border-color: var(--yellow); }
+  .pred-card.active-na       { border-color: rgba(255,255,255,0.2); }
+
+  .pred-level {
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: rgba(255,255,255,0.4);
+    margin-bottom: 6px;
+  }
+  .pred-outcome {
+    font-family: Aboreto, serif;
+    font-size: clamp(16px, 1.8vw, 22px);
+    line-height: 1.1; margin-bottom: 8px;
+    transition: color .4s ease;
+  }
+  .pred-outcome.resolved  { color: var(--green); }
+  .pred-outcome.failed    { color: var(--red); }
+  .pred-outcome.escalated { color: var(--orange); }
+  .pred-outcome.abandoned { color: var(--yellow); }
+  .pred-outcome.na        { color: rgba(255,255,255,0.3); }
+
+  .pred-prob-bar {
+    height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.08); margin-bottom: 6px;
+    overflow: hidden;
+  }
+  .pred-prob-fill {
+    height: 100%; border-radius: 2px;
+    transition: width .6s cubic-bezier(.4,0,.2,1), background .4s ease;
+  }
+  .pred-prob-text {
+    font-size: 11px; color: rgba(255,255,255,0.45);
+  }
+  .pred-prob-text span { font-weight: 700; color: rgba(255,255,255,0.75); }
+
+  /* ── Behavioral signal breakdown ── */
+  .signal-section { }
+  .signal-title {
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: rgba(255,255,255,0.4);
+    margin-bottom: 12px;
+  }
+  .signal-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .signal-name {
+    font-size: 11px; color: rgba(255,255,255,0.55);
+    width: 110px; flex-shrink: 0; letter-spacing: .03em;
+  }
+  .signal-bar-wrap {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.06); overflow: hidden;
+  }
+  .signal-bar {
+    height: 100%; border-radius: 3px;
+    transition: width .5s ease, background .4s ease;
+  }
+  .signal-icon {
+    font-size: 12px; width: 16px; text-align: center;
+  }
+
+  /* ── Intervention box ── */
+  .intervention {
+    border-radius: 12px; padding: 16px;
+    background: rgba(255,165,0,0.07);
+    border: 1px solid rgba(255,165,0,0.2);
+    transition: all .4s ease;
+  }
+  .intervention.hidden { opacity: 0; pointer-events: none; }
+  .intervention-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--orange);
+    margin-bottom: 8px;
+  }
+  .intervention-text {
+    font-size: 13px; line-height: 1.6;
+    color: rgba(255,255,255,0.75);
+  }
+
+  /* ── Attribution ── */
+  .attribution {
+    text-align: center; margin-top: 28px;
+    font-size: 11px; color: rgba(255,255,255,0.25);
+    letter-spacing: .04em;
+  }
+  .attribution a { color: rgba(255,165,0,0.5); text-decoration: none; }
+  .attribution a:hover { color: var(--orange); }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .app-body { grid-template-columns: 1fr; }
+    .prediction-row { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 480px) {
+    .prediction-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div style="display:block!important;width:100%!important;float:none!important;">
+<div class="app-header">
+  <p class="eyebrow">Interactive Model Demo</p>
+  <h1>Conversation Risk Scorer</h1>
+  <p>Input session characteristics to predict failure risk and mode — powered by a nested random forest trained on 1,250 AI assistant conversations.</p>
+</div>
+
+<!-- Gauge — full width above grid -->
+<div class="gauge-full">
+  <div class="gauge-wrap">
+    <svg class="gauge-svg" viewBox="0 0 200 120" style="overflow:visible;">
+      <path class="gauge-track"
+        d="M 18 105 A 82 82 0 0 1 182 105"
+        stroke-dasharray="257" stroke-dashoffset="0"/>
+      <path class="gauge-fill" id="gauge-arc"
+        d="M 18 105 A 82 82 0 0 1 182 105"
+        stroke-dasharray="257" stroke-dashoffset="257"
+        stroke="var(--orange)"/>
+      <text text-anchor="middle" x="100" y="88"
+            font-family="Aboreto,serif" font-size="26"
+            fill="white" id="gauge-pct">0%</text>
+      <text text-anchor="middle" x="100" y="104"
+            font-family="Mulish,sans-serif" font-size="9"
+            fill="rgba(255,255,255,0.45)"
+            letter-spacing="2">FAILURE RISK</text>
+      <text x="12" y="118" fill="rgba(255,255,255,0.3)"
+            font-size="9" font-family="Mulish">Low</text>
+      <text x="166" y="118" fill="rgba(255,255,255,0.3)"
+            font-size="9" font-family="Mulish">High</text>
+    </svg>
+  </div>
+</div>
+
+<div class="app-body">
+
+  <!-- ── LEFT: Controls ── -->
+  <div class="panel">
+    <div class="panel-title">Session Parameters</div>
+
+    <!-- Categorical features first -->
+    <div class="select-group">
+      <div class="feature-header" style="margin-bottom:8px;">
+        <span class="feature-label">Task Type</span>
+      </div>
+      <select id="sl-task" onchange="update()">
+        <option value="0">Informational</option>
+        <option value="1" selected>Support</option>
+        <option value="2">Transactional</option>
+      </select>
+    </div>
+
+    <div class="select-group">
+      <div class="feature-header" style="margin-bottom:8px;">
+        <span class="feature-label">Primary Intent</span>
+      </div>
+      <select id="sl-intent" onchange="update()">
+        <option value="0">Billing</option>
+        <option value="1">General Info</option>
+        <option value="2" selected>Order Status</option>
+        <option value="3">Return</option>
+        <option value="4">Technical Support</option>
+      </select>
+    </div>
+
+    <!-- Continuous features -->
+    <div class="feature-group">
+      <div class="feature-header">
+        <span class="feature-label">Total Turns</span>
+        <span class="feature-value" id="val-turns">8</span>
+      </div>
+      <p class="feature-desc">Number of exchanges in the session (2–19)</p>
+      <input type="range" id="sl-turns" min="2" max="19" step="1" value="8"
+             oninput="update()">
+    </div>
+
+    <div class="feature-group">
+      <div class="feature-header">
+        <span class="feature-label">Avg Sentiment</span>
+        <span class="feature-value" id="val-sentiment">0.00</span>
+      </div>
+      <p class="feature-desc">Mean user sentiment across turns (−1.4 negative → +1.7 positive)</p>
+      <input type="range" id="sl-sentiment" min="-1.36" max="1.69" step="0.01" value="0"
+             oninput="update()">
+    </div>
+
+    <div class="feature-group">
+      <div class="feature-header">
+        <span class="feature-label">Sentiment Range</span>
+        <span class="feature-value" id="val-range">2.68</span>
+      </div>
+      <p class="feature-desc">Emotional volatility — max minus min sentiment (0–5.6)</p>
+      <input type="range" id="sl-range" min="0" max="5.57" step="0.01" value="2.68"
+             oninput="update()">
+    </div>
+
+    <div class="feature-group">
+      <div class="feature-header">
+        <span class="feature-label">Intent Confidence</span>
+        <span class="feature-value" id="val-confidence">0.78</span>
+      </div>
+      <p class="feature-desc">Avg bot confidence in intent recognition (0.58–0.94)</p>
+      <input type="range" id="sl-confidence" min="0.58" max="0.94" step="0.01" value="0.78"
+             oninput="update()">
+    </div>
+
+    <div class="feature-group">
+      <div class="feature-header">
+        <span class="feature-label">Avg Latency (ms)</span>
+        <span class="feature-value" id="val-latency">478</span>
+      </div>
+      <p class="feature-desc">Mean bot response time in milliseconds (120–7004)</p>
+      <input type="range" id="sl-latency" min="120" max="2000" step="10" value="478"
+             oninput="update()">
+    </div>
+
+    <div class="feature-group">
+      <div class="feature-header">
+        <span class="feature-label">Total Failures</span>
+        <span class="feature-value" id="val-failures">2</span>
+      </div>
+      <p class="feature-desc">Turns where resolution was unsuccessful (0–7)</p>
+      <input type="range" id="sl-failures" min="0" max="7" step="1" value="2"
+             oninput="update()">
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT: Results ── -->
+  <div class="panel results-panel">
+    <div class="panel-title">Risk Assessment</div>
+
+    <!-- Prediction cards -->
+    <div class="prediction-row">
+      <div class="pred-card l1" id="card-l1">
+        <div class="pred-level">Level 1 — Outcome</div>
+        <div class="pred-outcome" id="outcome-l1">—</div>
+        <div class="pred-prob-bar">
+          <div class="pred-prob-fill" id="bar-l1" style="width:0%"></div>
+        </div>
+        <div class="pred-prob-text">Confidence: <span id="conf-l1">—</span></div>
+      </div>
+      <div class="pred-card l2" id="card-l2">
+        <div class="pred-level">Level 2 — If Failed</div>
+        <div class="pred-outcome" id="outcome-l2">—</div>
+        <div class="pred-prob-bar">
+          <div class="pred-prob-fill" id="bar-l2" style="width:0%"></div>
+        </div>
+        <div class="pred-prob-text">Confidence: <span id="conf-l2">—</span></div>
+      </div>
+    </div>
+
+    <!-- Signal breakdown -->
+    <div class="signal-section">
+      <div class="signal-title">Behavioral Signal Strength</div>
+      <div id="signals"></div>
+    </div>
+
+    <!-- Intervention recommendation -->
+    <div class="intervention" id="intervention">
+      <div class="intervention-label">Recommended Intervention</div>
+      <div class="intervention-text" id="intervention-text">—</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="attribution">
+  Dataset: <a href="https://github.com/mohsen-rafiei/UX_datasets" target="_blank" rel="noopener">Mohsen Rafi — UX Datasets (GitHub)</a> &nbsp;·&nbsp;
+  Model: Nested Random Forest, scikit-learn &nbsp;·&nbsp;
+  Built by Ishika Ray
+</div>
+
+<script>
+// ── Model scoring logic ──────────────────────────────────────
+// Derived from trained random forest feature importances and
+// calibrated against model probability outputs.
+
+// Feature ranges (from training data)
+const RANGES = {
+  turns:      { min: 2,    max: 19,   mean: 7.42 },
+  sentiment:  { min: -1.36,max: 1.69, mean: 0.0  },
+  range:      { min: 0,    max: 5.57, mean: 2.68  },
+  confidence: { min: 0.58, max: 0.94, mean: 0.78  },
+  latency:    { min: 120,  max: 7004, mean: 477.96 },
+  failures:   { min: 0,    max: 7,    mean: 2.11  },
+};
+
+// Normalize a value to 0–1
+function norm(val, min, max) {
+  return Math.max(0, Math.min(1, (val - min) / (max - min)));
+}
+
+// Sigmoid
+function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+// L1 importance weights (from sklearn output)
+// Direction: 1 = higher value → more likely FAILED
+const L1_WEIGHTS = [
+  { key: 'latency',    w: 0.162, dir:  1 },
+  { key: 'range',      w: 0.157, dir:  1 },
+  { key: 'confidence', w: 0.154, dir: -1 },
+  { key: 'minSent',    w: 0.151, dir:  1 },
+  { key: 'sentiment',  w: 0.144, dir: -1 },
+  { key: 'turns',      w: 0.081, dir:  1 },
+  { key: 'failures',   w: 0.061, dir:  1 },
+  { key: 'intent',     w: 0.056, dir:  0 },
+  { key: 'task',       w: 0.034, dir:  0 },
+];
+
+// L2 importance weights
+// Direction: 1 = higher value → more likely ESCALATED
+const L2_WEIGHTS = [
+  { key: 'failures',   w: 0.169, dir:  1 },
+  { key: 'latency',    w: 0.138, dir:  1 },
+  { key: 'turns',      w: 0.131, dir:  1 },
+  { key: 'confidence', w: 0.129, dir: -1 },
+  { key: 'range',      w: 0.123, dir:  0 },
+  { key: 'sentiment',  w: 0.121, dir: -1 },
+  { key: 'minSent',    w: 0.118, dir:  1 },
+  { key: 'intent',     w: 0.041, dir:  0 },
+  { key: 'task',       w: 0.030, dir:  0 },
+];
+
+function getFeatures() {
+  const turns      = +document.getElementById('sl-turns').value;
+  const sentiment  = +document.getElementById('sl-sentiment').value;
+  const srange     = +document.getElementById('sl-range').value;
+  const confidence = +document.getElementById('sl-confidence').value;
+  const latency    = +document.getElementById('sl-latency').value;
+  const failures   = +document.getElementById('sl-failures').value;
+  const task       = +document.getElementById('sl-task').value;
+  const intent     = +document.getElementById('sl-intent').value;
+  // approx min_sentiment from sentiment and range
+  const minSent    = sentiment - srange * 0.6;
+
+  return { turns, sentiment, range: srange, confidence,
+           latency, failures, task, intent, minSent };
+}
+
+function scoreLevel(features, weights, bias) {
+  let score = bias;
+  const norms = {
+    turns:      norm(features.turns,      RANGES.turns.min,      RANGES.turns.max),
+    sentiment:  norm(features.sentiment,  RANGES.sentiment.min,  RANGES.sentiment.max),
+    range:      norm(features.range,      RANGES.range.min,      RANGES.range.max),
+    confidence: norm(features.confidence, RANGES.confidence.min, RANGES.confidence.max),
+    latency:    norm(features.latency,    RANGES.latency.min,    RANGES.latency.max),
+    failures:   norm(features.failures,   RANGES.failures.min,   RANGES.failures.max),
+    minSent:    norm(features.minSent,    -3.79, 1.33),
+    intent:     norm(features.intent,     0, 4),
+    task:       norm(features.task,       0, 2),
+  };
+
+  for (const { key, w, dir } of weights) {
+    if (dir === 0) continue;
+    const n = dir === 1 ? norms[key] : (1 - norms[key]);
+    score += w * (n - 0.5) * 4.5;
+  }
+  return sigmoid(score);
+}
+
+function getSignalStrengths(features) {
+  const norms = {
+    'Total Failures':   norm(features.failures,   0,     7),
+    'Response Latency': norm(features.latency,     120,   2000),
+    'Sentiment':        1 - norm(features.sentiment, -1.36, 1.69),
+    'Emotional Swings': norm(features.range,       0,     5.57),
+    'Intent Clarity':   1 - norm(features.confidence, 0.58, 0.94),
+    'Conv. Length':     norm(features.turns,       2,     19),
+  };
+  return norms;
+}
+
+function update() {
+  const f = getFeatures();
+
+  // Update display values
+  document.getElementById('val-turns').textContent     = f.turns;
+  document.getElementById('val-sentiment').textContent = f.sentiment.toFixed(2);
+  document.getElementById('val-range').textContent     = f.range.toFixed(2);
+  document.getElementById('val-confidence').textContent= f.confidence.toFixed(2);
+  document.getElementById('val-latency').textContent   = Math.round(f.latency);
+  document.getElementById('val-failures').textContent  = f.failures;
+
+  // Score L1
+  const pFailed   = scoreLevel(f, L1_WEIGHTS, 0.1);
+  const pResolved = 1 - pFailed;
+
+  // Score L2 (only meaningful if failed)
+  const pEscalated = scoreLevel(f, L2_WEIGHTS, -0.15);
+  const pAbandoned = 1 - pEscalated;
+
+  // ── Gauge ──
+  const gaugeArc = document.getElementById('gauge-arc');
+  const gaugePct = document.getElementById('gauge-pct');
+  const totalArc = 257;
+  const offset   = totalArc * (1 - pFailed);
+  gaugeArc.style.strokeDashoffset = offset;
+
+  const pct = Math.round(pFailed * 100);
+  gaugePct.textContent = pct + '%';
+
+  const gaugeColor = pFailed < 0.35 ? '#2a9d8f'
+                   : pFailed < 0.60 ? '#e9c46a'
+                   : '#e63946';
+  gaugeArc.style.stroke = gaugeColor;
+
+  // ── L1 prediction card ──
+  const l1Outcome = pFailed > 0.5 ? 'failed' : 'resolved';
+  const l1Conf    = l1Outcome === 'failed' ? pFailed : pResolved;
+  const cardL1    = document.getElementById('card-l1');
+  const outL1     = document.getElementById('outcome-l1');
+  const barL1     = document.getElementById('bar-l1');
+  const confL1    = document.getElementById('conf-l1');
+
+  outL1.textContent  = l1Outcome === 'failed' ? 'Failed' : 'Resolved';
+  outL1.className    = 'pred-outcome ' + l1Outcome;
+  barL1.style.width  = (l1Conf * 100) + '%';
+  barL1.style.background = l1Outcome === 'failed' ? 'var(--red)' : 'var(--green)';
+  confL1.textContent = Math.round(l1Conf * 100) + '%';
+  cardL1.className   = 'pred-card l1 active-' + l1Outcome;
+
+  // ── L2 prediction card ──
+  const cardL2 = document.getElementById('card-l2');
+  const outL2  = document.getElementById('outcome-l2');
+  const barL2  = document.getElementById('bar-l2');
+  const confL2 = document.getElementById('conf-l2');
+
+  if (l1Outcome === 'failed') {
+    const l2Outcome = pEscalated > 0.5 ? 'escalated' : 'abandoned';
+    const l2Conf    = l2Outcome === 'escalated' ? pEscalated : pAbandoned;
+    outL2.textContent  = l2Outcome === 'escalated' ? 'Escalated' : 'Abandoned';
+    outL2.className    = 'pred-outcome ' + l2Outcome;
+    barL2.style.width  = (l2Conf * 100) + '%';
+    barL2.style.background = l2Outcome === 'escalated' ? 'var(--orange)' : 'var(--yellow)';
+    confL2.textContent = Math.round(l2Conf * 100) + '%';
+    cardL2.className   = 'pred-card l2 active-' + l2Outcome;
+  } else {
+    outL2.textContent = 'N/A';
+    outL2.className   = 'pred-outcome na';
+    barL2.style.width = '0%';
+    confL2.textContent = '—';
+    cardL2.className  = 'pred-card l2 active-na';
+  }
+
+  // ── Signal bars ──
+  const signals = getSignalStrengths(f);
+  const signalColors = {
+    'Total Failures':   '#e63946',
+    'Response Latency': '#e9c46a',
+    'Sentiment':        '#e63946',
+    'Emotional Swings': '#ffa500',
+    'Intent Clarity':   '#e9c46a',
+    'Conv. Length':     '#2a9d8f',
+  };
+  const signalIcons = {
+    'Total Failures':   '✗',
+    'Response Latency': '⏱',
+    'Sentiment':        '↓',
+    'Emotional Swings': '~',
+    'Intent Clarity':   '?',
+    'Conv. Length':     '↔',
+  };
+
+  const signalEl = document.getElementById('signals');
+  signalEl.innerHTML = Object.entries(signals).map(([name, val]) => `
+    <div class="signal-row">
+      <span class="signal-name">${name}</span>
+      <div class="signal-bar-wrap">
+        <div class="signal-bar" style="width:${val*100}%; background:${signalColors[name]};"></div>
+      </div>
+      <span class="signal-icon">${val > 0.65 ? signalIcons[name] : '·'}</span>
+    </div>
+  `).join('');
+
+  // ── Intervention ──
+  const ivEl   = document.getElementById('intervention');
+  const ivText = document.getElementById('intervention-text');
+
+  if (l1Outcome === 'resolved') {
+    ivEl.style.borderColor = 'rgba(42,157,143,0.3)';
+    ivEl.style.background  = 'rgba(42,157,143,0.07)';
+    document.querySelector('.intervention-label').style.color = '#2a9d8f';
+    ivText.textContent = 'Session on track. No intervention needed. Monitor sentiment for early drift signals.';
+  } else {
+    const l2Mode = pEscalated > 0.5 ? 'escalated' : 'abandoned';
+    if (l2Mode === 'escalated') {
+      ivEl.style.borderColor = 'rgba(255,165,0,0.3)';
+      ivEl.style.background  = 'rgba(255,165,0,0.07)';
+      document.querySelector('.intervention-label').style.color = 'var(--orange)';
+      ivText.textContent = 'Escalation likely. User is persisting through failures — proactively offer human handoff before frustration peaks. Prioritize billing and technical support intents.';
+    } else {
+      ivEl.style.borderColor = 'rgba(233,196,106,0.3)';
+      ivEl.style.background  = 'rgba(233,196,106,0.07)';
+      document.querySelector('.intervention-label').style.color = 'var(--yellow)';
+      ivText.textContent = 'Abandonment risk. User shows early disengagement signals — trigger a check-in message or simplified resolution path at Turn 3 before they leave silently.';
+    }
+  }
+}
+
+// Init on load
+update();
+</script>
+</div><!-- master -->
+</body>
+</html>
